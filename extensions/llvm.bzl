@@ -1,5 +1,5 @@
 load("@bazel_skylib//lib:structs.bzl", "structs")
-load("//private:llvm_project_archive.bzl", "llvm_project_archive")
+load("//private:llvm_project_archive.bzl", "default_excludes", "llvm_project_archive")
 load("//private:llvm_project_from_git.bzl", "llvm_project_from_git")
 load("//private:llvm_project_from_path.bzl", "llvm_project_from_path")
 
@@ -106,7 +106,7 @@ _LLVM_PATCHES_BY_MAJOR = {
     ],
 }
 
-def _create_llvm_project_repository(mctx, llvm_version, llvm_version_index, targets):
+def _create_llvm_project_repository(mctx, llvm_version, llvm_version_index, targets, flang):
     had_override = False
 
     for module in mctx.modules:
@@ -130,7 +130,12 @@ def _create_llvm_project_repository(mctx, llvm_version, llvm_version_index, targ
 
     if not had_override:
         source_archive = _source_archive_for_version(llvm_version, llvm_version_index)
-        llvm_project_archive(name = "llvm-project", targets = targets, **structs.to_dict(source_archive))
+        llvm_project_archive(
+            name = "llvm-project",
+            excludes = default_excludes(flang = flang),
+            targets = targets,
+            **structs.to_dict(source_archive)
+        )
 
 def _parse_llvm_major(llvm_version):
     major = llvm_version.partition(".")[0]
@@ -223,6 +228,13 @@ def _get_llvm_targets(mctx):
                 targets[target] = None
     return targets.keys()
 
+def _wants_flang(mctx):
+    return any([
+        configure.flang
+        for module in mctx.modules
+        for configure in module.tags.configure
+    ])
+
 def _llvm_impl(mctx):
     llvm_version = _get_llvm_version(mctx)
     llvm_version_index = _get_llvm_version_index(mctx)
@@ -231,7 +243,13 @@ def _llvm_impl(mctx):
         name = "llvm_version",
         llvm_version = llvm_version,
     )
-    _create_llvm_project_repository(mctx, llvm_version, llvm_version_index, _get_llvm_targets(mctx))
+    _create_llvm_project_repository(
+        mctx,
+        llvm_version,
+        llvm_version_index,
+        _get_llvm_targets(mctx),
+        flang = _wants_flang(mctx),
+    )
 
     root_deps = _root_direct_deps(mctx)
     return mctx.extension_metadata(
@@ -248,7 +266,14 @@ _version_tag = tag_class(
 
 _configure_tag = tag_class(
     attrs = {
-        "targets": attr.string_list(mandatory = True),
+        "targets": attr.string_list(
+            doc = "LLVM targets to build; the union over all modules is used.",
+        ),
+        "flang": attr.bool(
+            doc = "Keep the flang and flang-rt sources in @llvm-project so that " +
+                  "Flang can be built from it. Off by default: the sources are " +
+                  "large and C/C++ toolchains do not need them.",
+        ),
     },
 )
 

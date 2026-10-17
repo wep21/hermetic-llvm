@@ -23,10 +23,21 @@ _DEFAULT_OVERLAY_FILES = {
     "openmp/BUILD.bazel": Label("//3rd_party/llvm-project/x.x/openmp:openmp.BUILD.bazel"),
 }
 
-def _default_excludes():
-    excludes = [
+def default_excludes(flang = False):
+    """Paths of the llvm-project archive that are not extracted.
+
+    Args:
+      flang: keep the flang and flang-rt sources (still without their tests
+        and docs). They are large and only needed to build Flang itself.
+
+    Returns:
+      A list of bsdtar exclude patterns.
+    """
+    excludes = [] if flang else [
         "flang-rt",
         "flang",
+    ]
+    excludes += [
         "polly",
         "orc-rt",
         "libclc",
@@ -41,6 +52,8 @@ def _default_excludes():
         "clang-tools-extra",
         "clang",
         "compiler-rt",
+        "flang",
+        "flang-rt",
         "libcxx",
         "libcxxabi",
         "libunwind",
@@ -209,7 +222,7 @@ _llvm_project_archive_attrs = {
     "patch_cmds": attr.string_list(default = []),
     "patch_cmds_win": attr.string_list(default = []),
     "includes": attr.string_list(default = []),
-    "excludes": attr.string_list(default = _default_excludes()),
+    "excludes": attr.string_list(default = default_excludes()),
     "targets": attr.string_list(mandatory = True),
 }
 
